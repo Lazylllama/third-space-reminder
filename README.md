@@ -85,6 +85,7 @@ Slack verifies the request URL when you save the manifest. If the app isn't depl
    | `ENCRYPTION_KEY` | output of `openssl rand -base64 32`. Keep it forever: changing it forces everyone to reconnect |
    | `DATABASE_PATH` | `/data/goblin.sqlite` (already the default in the image) |
    | `ALLOWED_SLACK_IDS` | optional, e.g. `U0123,U0456` to limit who can use it |
+   | `ADMIN_SLACK_IDS` | optional, your member ID (Slack profile → ⋮ → Copy member ID). Admins get a usage section on the Home tab |
    | `DRY_RUN` | optional, `true` logs DMs instead of sending them |
 
 6. Deploy. The logs should say `deadline goblin is up`.
@@ -109,6 +110,27 @@ Commands:
 
 In the DM you can type `status` or `help`.
 
+## Checking usage
+
+Put your member ID in `ADMIN_SLACK_IDS`. You'll get a **🛠 admin** section at the bottom of the goblin's Home tab, refreshed every time you open it (or hit 🔄 refresh).
+
+What's in it:
+- **Counts:** actively nagged (connected, not paused, with an enabled reminder), connected, needs reconnect, everyone who opened the goblin, paused, reminders, and DMs sent in the last 24h and 7d.
+- **This week's tally:** 🔌 needs reconnect, ⚠️ behind, 🏁 done but not shipped, ❔ no data, ✅ on track, 🚢 shipped, ⏸ paused.
+- **Last week:** how many hit the goal, and how many shipped.
+- **Every user:** their reminders, hours, and state, sorted worst first.
+
+The numbers come from each reminder's last check-in, not from live Hackatime calls, so the section stays fast however many people use it. Each line says how old its numbers are.
+
+Privacy: admins can see everyone's weekly progress. Only list people who should.
+
+Without an admin ID you can still query the database from Coolify's terminal:
+
+```sh
+bun -e 'const db = new (require("bun:sqlite").Database)("/data/goblin.sqlite", { readonly: true });
+console.log(db.query("select count(distinct r.slack_id) as n from reminders r join users u using (slack_id) where r.enabled = 1 and u.token_status = ?").get("ok"))'
+```
+
 ## Development
 
 ```sh
@@ -131,7 +153,8 @@ For local Slack testing, expose the port with a tunnel (e.g. `cloudflared tunnel
 | `src/engine/evaluate.ts` | Hackatime numbers into a status, with a stale-cache fallback |
 | `src/scheduler.ts` | the minute tick: claim slot, evaluate, decide, send |
 | `src/messages/` | quotes and message rendering |
-| `src/slack/` | App Home, modals, buttons, `/goblin`, DMs |
+| `src/slack/` | App Home, modals, buttons, `/goblin`, DMs, admin section |
+| `src/admin/usage.ts` | classifies every reminder for the admin overview (from cached numbers) |
 | `src/hackatime/client.ts` | Hackatime API + OAuth client (retries, auth errors, caching) |
 | `src/http/routes.ts` | OAuth callback page |
 | `src/db/` | SQLite schema and queries |

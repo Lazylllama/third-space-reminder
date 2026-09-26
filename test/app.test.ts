@@ -44,6 +44,10 @@ describe("config", () => {
   test("allowlist", () => {
     expect([...loadConfig({ ...env, ALLOWED_SLACK_IDS: "U1, U2" }).allowedSlackIds!]).toEqual(["U1", "U2"]);
   });
+  test("admins", () => {
+    expect([...loadConfig(env).adminSlackIds]).toEqual([]);
+    expect([...loadConfig({ ...env, ADMIN_SLACK_IDS: " U9 ,U8," }).adminSlackIds]).toEqual(["U9", "U8"]);
+  });
 });
 
 describe("repo", () => {

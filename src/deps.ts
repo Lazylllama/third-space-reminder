@@ -19,7 +19,7 @@ export interface SlackGateway {
 }
 
 export interface Deps {
-  config: Pick<Config, "encryptionKey" | "dryRun" | "allowedSlackIds" | "publicUrl">;
+  config: Pick<Config, "encryptionKey" | "dryRun" | "allowedSlackIds" | "adminSlackIds" | "publicUrl">;
   repo: Repo;
   hackatime: HackatimeClient;
   slack: SlackGateway;
@@ -40,6 +40,11 @@ export function createLogger(level: "debug" | "info" | "warn" | "error"): Logger
   return { debug: emit("debug"), info: emit("info"), warn: emit("warn"), error: emit("error") };
 }
 
+export function isAdmin(deps: Pick<Deps, "config">, slackId: string): boolean {
+  return deps.config.adminSlackIds.has(slackId);
+}
+
+/** Admins always get in, even when an allowlist is set. */
 export function isAllowed(deps: Pick<Deps, "config">, slackId: string): boolean {
-  return !deps.config.allowedSlackIds || deps.config.allowedSlackIds.has(slackId);
+  return !deps.config.allowedSlackIds || deps.config.allowedSlackIds.has(slackId) || isAdmin(deps, slackId);
 }

@@ -53,6 +53,30 @@ export interface CachedStatus {
   computedAt: number;
 }
 
+export interface UsageCounts {
+  /** Everyone who ever opened the Home tab. */
+  users: number;
+  connected: number;
+  needsReconnect: number;
+  /** Connected, not paused, with at least one enabled reminder. */
+  activelyNagged: number;
+  pausedUsers: number;
+  reminders: number;
+  remindersEnabled: number;
+  dmsLastDay: number;
+  dmsLastWeek: number;
+}
+
+export interface AdminReminderRow {
+  reminder: Reminder;
+  tz: string | null;
+  tokenStatus: TokenStatus;
+  pausedUntil: number | null;
+  cache: CachedStatus | null;
+  /** Shipped timestamp for the week asked about. */
+  shippedAt: number | null;
+}
+
 function toUser(r: UserRow): User {
   return {
     slackId: r.slack_id,
@@ -344,6 +368,84 @@ export class Repo {
 
   pruneOAuthStates() {
     this.db.query("DELETE FROM oauth_states WHERE expires_at < ?").run(this.clock());
+  }
+
+  // ---------- admin usage ----------
+
+  usageCounts(now: number): UsageCounts {
+    const n = (sql: string, ...params: number[]) => (this.db.query<{ n: number }, number[]>(sql).get(...params)?.n ?? 0);
+    return {
+      users: n("SELECT COUNT(*) AS n FROM users"),
+      connected: n("SELECT COUNT(*) AS n FROM users WHERE token_status = 'ok'"),
+      needsReconnect: n("SELECT COUNT(*) AS n FROM users WHERE token_status = 'invalid'"),
+      activelyNagged: n(
+        `SELECT COUNT(*) AS n FROM users u WHERE u.token_status = 'ok' AND (u.paused_until IS NULL OR u.paused_until <= ?)
+         AND EXISTS (SELECT 1 FROM reminders r WHERE r.slack_id = u.slack_id AND r.enabled = 1)`,
+        now,
+      ),
+      pausedUsers: n("SELECT COUNT(*) AS n FROM users WHERE paused_until > ?", now),
+      reminders: n("SELECT COUNT(*) AS n FROM reminders"),
+      remindersEnabled: n("SELECT COUNT(*) AS n FROM reminders WHERE enabled = 1"),
+      dmsLastDay: n("SELECT COUNT(*) AS n FROM slot_log WHERE outcome = 'sent' AND created_at > ?", now - 24 * 3600_000),
+      dmsLastWeek: n("SELECT COUNT(*) AS n FROM slot_log WHERE outcome = 'sent' AND created_at > ?", now - 7 * 24 * 3600_000),
+    };
+  }
+
+  /** Every reminder with its owner's state, cached numbers and whether it shipped in `weekKey`. No Hackatime calls. */
+  adminReminderRows(weekKey: string): AdminReminderRow[] {
+    const rows = this.db
+      .query<
+        ReminderRow & {
+          u_tz: string | null;
+          u_token_status: TokenStatus;
+          u_paused_until: number | null;
+          c_week_key: string | null;
+          c_today_start: number | null;
+          c_week_seconds: number | null;
+          c_today_seconds: number | null;
+          c_computed_at: number | null;
+          shipped_at: number | null;
+        },
+        [string]
+      >(
+        `SELECT r.*, u.tz AS u_tz, u.token_status AS u_token_status, u.paused_until AS u_paused_until,
+                c.week_key AS c_week_key, c.today_start AS c_today_start, c.week_seconds AS c_week_seconds,
+                c.today_seconds AS c_today_seconds, c.computed_at AS c_computed_at, w.shipped_at AS shipped_at
+         FROM reminders r
+         JOIN users u ON u.slack_id = r.slack_id
+         LEFT JOIN status_cache c ON c.reminder_id = r.id
+         LEFT JOIN week_state w ON w.reminder_id = r.id AND w.week_key = ?
+         ORDER BY r.slack_id, r.id`,
+      )
+      .all(weekKey);
+    return rows.map((row) => ({
+      reminder: toReminder(row),
+      tz: row.u_tz,
+      tokenStatus: row.u_token_status,
+      pausedUntil: row.u_paused_until,
+      cache:
+        row.c_week_key !== null && row.c_computed_at !== null
+          ? {
+              weekKey: row.c_week_key,
+              todayStart: row.c_today_start ?? 0,
+              weekSeconds: row.c_week_seconds ?? 0,
+              todaySeconds: row.c_today_seconds ?? 0,
+              computedAt: row.c_computed_at,
+            }
+          : null,
+      shippedAt: row.shipped_at,
+    }));
+  }
+
+  /** How a finished week went across all reminders that have a recorded result. */
+  weekResultSummary(weekKey: string): { recorded: number; hit: number; shipped: number } {
+    const row = this.db
+      .query<{ recorded: number; hit: number | null; shipped: number | null }, [string]>(
+        `SELECT COUNT(*) AS recorded, SUM(total_seconds >= goal_seconds) AS hit, SUM(shipped_at IS NOT NULL) AS shipped
+         FROM week_results WHERE week_key = ?`,
+      )
+      .get(weekKey);
+    return { recorded: row?.recorded ?? 0, hit: row?.hit ?? 0, shipped: row?.shipped ?? 0 };
   }
 
   // ---------- status cache (fallback when Hackatime is down) ----------
