@@ -1,0 +1,23 @@
+{
+  "name": "deadline-goblin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Slack bot that nags you until your Third Space hours (Hackatime) are done.",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && bun test"
+  },
+  "dependencies": {
+    "@slack/bolt": "^5.1.0",
+    "luxon": "^3.7.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/luxon": "^3.7.5",
+    "typescript": "^7.0.2"
+  }
+}
