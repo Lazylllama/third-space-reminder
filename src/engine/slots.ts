@@ -14,7 +14,7 @@ export const FINAL_SPRINT_STEP_MS = 30 * MINUTE_MS;
 export const HEADS_UP_MINUTES = 19 * 60;
 
 export interface Slot {
-  at: number;
+  readonly at: number;
   /** A configured reminder hour. */
   hour: boolean;
   /** Final-day escalation slot. */
@@ -29,8 +29,21 @@ export function slotKey(slot: Slot): string {
 
 type SlotSettings = Pick<ReminderSettings, "hours" | "wrapDay" | "wrapMinutes">;
 
-/** All slots whose local date (in `zone`) is `date`. Sorted, deduped by instant. */
-export function slotsForDate(date: string, zone: string, settings: SlotSettings): Slot[] {
+const slotCache = new Map<string, readonly Slot[]>();
+const SLOT_CACHE_MAX = 5000;
+
+/** All slots whose local date (in `zone`) is `date`. Sorted, deduped by instant. Memoized (it's pure). */
+export function slotsForDate(date: string, zone: string, settings: SlotSettings): readonly Slot[] {
+  const key = `${date}|${zone}|${settings.hours.join(",")}|${settings.wrapDay}|${settings.wrapMinutes}`;
+  const hit = slotCache.get(key);
+  if (hit) return hit;
+  const slots = Object.freeze(buildSlotsForDate(date, zone, settings).map((s) => Object.freeze(s)));
+  if (slotCache.size >= SLOT_CACHE_MAX) slotCache.clear();
+  slotCache.set(key, slots);
+  return slots;
+}
+
+function buildSlotsForDate(date: string, zone: string, settings: SlotSettings): Slot[] {
   const byAt = new Map<number, Slot>();
   const add = (at: number, kind: "hour" | "final" | "headsUp") => {
     if (localDate(at, zone) !== date) return; // DST shifts can push a time onto another date
