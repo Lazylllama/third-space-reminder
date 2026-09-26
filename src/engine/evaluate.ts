@@ -15,9 +15,16 @@ export class NotConnectedError extends Error {
   }
 }
 
-export function tokenFor(deps: Pick<Deps, "config">, user: User): string {
+export function tokenFor(deps: Pick<Deps, "config" | "repo" | "log">, user: User): string {
   if (user.tokenStatus !== "ok" || !user.tokenEnc) throw new NotConnectedError();
-  return decrypt(user.tokenEnc, deps.config.encryptionKey);
+  try {
+    return decrypt(user.tokenEnc, deps.config.encryptionKey);
+  } catch {
+    // Most likely ENCRYPTION_KEY changed. The stored token is useless now, so ask the user to reconnect.
+    deps.repo.setTokenStatus(user.slackId, "invalid");
+    deps.log.error(`couldn't decrypt the hackatime token for ${user.slackId} (did ENCRYPTION_KEY change?), marked invalid`);
+    throw new HackatimeAuthError("stored token can't be decrypted");
+  }
 }
 
 /** Run a Hackatime call; an auth failure flips the user to "invalid" so the goblin can ask them to reconnect. */

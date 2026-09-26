@@ -29,6 +29,7 @@ import { adhocKind, statusMessage, summaryText } from "./status";
 const HOUR = 3600_000;
 const TZ_REFRESH_MS = 6 * HOUR;
 const PROJECT_CACHE_MS = 5 * 60_000;
+const OPTIONS_BUDGET_MS = 2_500;
 
 export function registerHandlers(app: App, deps: Deps) {
   const { repo, log } = deps;
@@ -185,12 +186,17 @@ export function registerHandlers(app: App, deps: Deps) {
       const cached = projectCache.get(slackId);
       if (cached && deps.clock() - cached.at < PROJECT_CACHE_MS) projects = cached.projects;
       else {
-        try {
-          projects = await deps.hackatime.projects(tokenFor(deps, user));
-          projectCache.set(slackId, { at: deps.clock(), projects });
-        } catch (err) {
+        // Slack gives options requests ~3s. If Hackatime is slower, answer with what we have and let the fetch fill the cache.
+        const fetching = (async () => {
+          const list = await deps.hackatime.projects(tokenFor(deps, user));
+          projectCache.set(slackId, { at: deps.clock(), projects: list });
+          return list;
+        })().catch((err) => {
           log.warn(`couldn't list projects for ${slackId}`, err);
-        }
+          return null;
+        });
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), OPTIONS_BUDGET_MS));
+        projects = (await Promise.race([fetching, timeout])) ?? cached?.projects ?? [];
       }
     }
     const q = query.toLowerCase();

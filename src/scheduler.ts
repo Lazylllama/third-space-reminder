@@ -1,6 +1,6 @@
 import type { Deps } from "./deps";
 import { type DecideState, dayDoneMarker, decide, kickoffMarker, weekDoneMarker } from "./engine/decide";
-import { evaluate, NotConnectedError, recordPreviousWeek } from "./engine/evaluate";
+import { evaluate, recordPreviousWeek } from "./engine/evaluate";
 import { dueSlot, slotKey } from "./engine/slots";
 import { HackatimeAuthError } from "./hackatime/client";
 import { type RenderKind, renderMessage } from "./messages/render";
@@ -112,12 +112,8 @@ export class Scheduler {
       for (const marker of decision.markers) repo.mark(reminder.id, marker, decision.kind);
       log.info(`sent ${decision.kind} to ${user.slackId} (reminder ${reminder.id}, ${key})`);
     } catch (err) {
-      if (err instanceof HackatimeAuthError || err instanceof NotConnectedError) {
-        // Let the next tick take the reconnect path for this same slot.
-        repo.releaseSlot(reminder.id, key);
-        return;
-      }
       repo.releaseSlot(reminder.id, key);
+      if (err instanceof HackatimeAuthError) return; // next tick takes the reconnect path for this same slot
       this.retryAfter.set(reminder.id, now + RETRY_AFTER_MS);
       log.error(`reminder ${reminder.id} slot ${key} failed, retrying in 5m`, err);
     }

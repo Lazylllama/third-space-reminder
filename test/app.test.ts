@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { loadConfig } from "../src/config";
 import { decrypt, encrypt } from "../src/crypto";
 import { handleOAuthCallback, renderPage } from "../src/http/routes";
-import { parseReminderSubmission, parseTzSubmission, reminderModal, searchZones } from "../src/slack/modals";
+import { parseReminderSubmission, parseTzSubmission, reminderModal, searchZones, tzModal } from "../src/slack/modals";
 import { buildHome } from "../src/slack/home";
 import { KEY, SLACK_ID, addReminder, connectUser, makeDeps } from "./helpers";
 
@@ -249,5 +249,55 @@ describe("home view", () => {
     const json = JSON.stringify(await buildHome(deps, SLACK_ID));
     expect(json).toContain("isn't taking new victims");
     expect(json).not.toContain("connect hackatime");
+  });
+});
+
+describe("block kit hygiene", () => {
+  test("no empty button values or oversized texts anywhere in the home view", async () => {
+    const { deps, repo, fake } = makeDeps("2026-09-23T17:00:00Z");
+    connectUser(repo);
+    for (let i = 0; i < 5; i++) addReminder(repo, { slackDays: [6, 7] });
+    fake.code("2026-09-21T09:00", 60);
+    const view = await buildHome(deps, SLACK_ID);
+    expect(view.blocks.length).toBeLessThanOrEqual(100);
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (!node || typeof node !== "object") return;
+      const o = node as Record<string, unknown>;
+      if (o.type === "button") {
+        if ("value" in o) expect(String(o.value).length).toBeGreaterThan(0);
+        expect(String((o.text as { text: string }).text).length).toBeLessThanOrEqual(75);
+      }
+      if ((o.type === "mrkdwn" || o.type === "plain_text") && typeof o.text === "string") expect(o.text.length).toBeLessThanOrEqual(3000);
+      Object.values(o).forEach(walk);
+    };
+    walk(view);
+    const unconnected = makeDeps("2026-09-23T17:00:00Z");
+    walk(await buildHome(unconnected.deps, SLACK_ID));
+  });
+
+  test("modal options, titles and buttons stay within slack limits", () => {
+    const now = Date.parse("2026-09-23T17:00:00Z");
+    const views = [
+      reminderModal({ reminder: null, tz: "America/Argentina/ComodRivadavia", now }),
+      tzModal({ current: "America/Argentina/ComodRivadavia", slackTz: "America/Argentina/ComodRivadavia", followingSlack: true }),
+    ];
+    for (const view of views) {
+      expect(view.title.text.length).toBeLessThanOrEqual(24);
+      expect(view.submit!.text.length).toBeLessThanOrEqual(24);
+      const walk = (node: unknown): void => {
+        if (Array.isArray(node)) return node.forEach(walk);
+        if (!node || typeof node !== "object") return;
+        const o = node as Record<string, unknown>;
+        for (const key of ["options", "initial_options"]) {
+          for (const opt of (o[key] as { text: { text: string }; value: string }[] | undefined) ?? []) {
+            expect(opt.text.text.length).toBeLessThanOrEqual(75);
+            expect(opt.value.length).toBeGreaterThan(0);
+          }
+        }
+        Object.values(o).forEach(walk);
+      };
+      walk(view);
+    }
   });
 });

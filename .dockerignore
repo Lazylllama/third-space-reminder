@@ -1,0 +1,10 @@
+node_modules
+.git
+.env
+.env.*
+data
+*.sqlite
+*.sqlite-*
+test
+README.md
+manifest.yml

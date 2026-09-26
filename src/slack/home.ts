@@ -39,7 +39,8 @@ const plain = (t: string) => ({ type: "plain_text" as const, text: t, emoji: tru
 const md = (t: string) => ({ type: "mrkdwn" as const, text: t });
 
 function btn(label: string, actionId: string, value = "", extra: Partial<Button> = {}): Button {
-  return { type: "button", text: plain(label), action_id: actionId, value, ...extra };
+  // Slack rejects empty `value`s, so leave the key out instead.
+  return { type: "button", text: plain(label), action_id: actionId, ...(value ? { value } : {}), ...extra };
 }
 
 /** Build the App Home for a user. Never throws for Hackatime trouble; it shows it instead. */

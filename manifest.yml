@@ -1,0 +1,47 @@
+# Slack app manifest for the deadline goblin.
+# Replace every YOUR-DOMAIN with your Coolify domain (same host as PUBLIC_URL), then:
+# api.slack.com/apps > Create New App > From a manifest > pick the workspace > paste this.
+display_information:
+  name: deadline goblin
+  description: Nags you until your Third Space hours are in.
+  long_description: >-
+    The deadline goblin reads your Hackatime hours for the projects you pick, splits your weekly goal
+    into daily targets, tracks debt when you fall behind and DMs you (annoyingly, on purpose) until the
+    week's hours are done and shipped. Built for thirdspace.hackclub.com: 10 hours a week, reset every
+    Monday 00:00 New York time.
+  background_color: "#302b24"
+features:
+  app_home:
+    home_tab_enabled: true
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: deadline goblin
+    always_online: true
+  slash_commands:
+    - command: /goblin
+      url: https://YOUR-DOMAIN/slack/events
+      description: Talk to the deadline goblin
+      usage_hint: "[status | pause 2 | resume | test | help]"
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - commands
+      - im:history
+      - im:write
+      - users:read
+settings:
+  event_subscriptions:
+    request_url: https://YOUR-DOMAIN/slack/events
+    bot_events:
+      - app_home_opened
+      - message.im
+  interactivity:
+    is_enabled: true
+    request_url: https://YOUR-DOMAIN/slack/events
+    message_menu_options_url: https://YOUR-DOMAIN/slack/events
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

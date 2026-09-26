@@ -29,7 +29,7 @@ describe("quotes", () => {
 
   test("no em or en dashes, anywhere", () => {
     for (const { pool, i, line } of all) {
-      if (/[–—]/.test(line)) throw new Error(`dash in ${pool}:${i}`);
+      if (/[\u2013\u2014]/.test(line)) throw new Error(`dash in ${pool}:${i}`);
     }
   });
 
@@ -63,7 +63,7 @@ describe("render", () => {
       });
       expect(msg.text.startsWith("hey <@U123>, ")).toBe(true);
       expect(msg.text).not.toMatch(/\{[a-z_]+\}/);
-      expect(msg.text).not.toMatch(/[–—]/);
+      expect(msg.text).not.toMatch(/[\u2013\u2014]/);
       expect(JSON.stringify(msg.blocks)).toContain("third &lt;space&gt;");
       expect(msg.quoteId.length).toBeGreaterThan(0);
     });
