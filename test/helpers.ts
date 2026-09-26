@@ -99,7 +99,7 @@ export function makeDeps(startIso: string) {
     error: (...a: unknown[]) => logs.push(a.map(String).join(" ")),
   };
   const deps: Deps = {
-    config: { encryptionKey: KEY, dryRun: false, allowedSlackIds: null, publicUrl: "https://goblin.test" },
+    config: { encryptionKey: KEY, dryRun: false, allowedSlackIds: null, adminSlackIds: new Set<string>(), publicUrl: "https://goblin.test" },
     repo,
     hackatime,
     slack,
@@ -115,7 +115,7 @@ export function connectUser(repo: Repo, tz = "Europe/Stockholm", slackId = SLACK
   repo.setTimezone(slackId, tz, "slack");
 }
 
-export function addReminder(repo: Repo, settings: Partial<ReminderSettings> = {}, slackId = SLACK_ID) {
+export function addReminder(repo: Repo, settings: Partial<ReminderSettings & { name: string; projects: string[] }> = {}, slackId = SLACK_ID) {
   return repo.createReminder(slackId, { ...DEFAULT_SETTINGS, name: "third space", projects: ["goblin"], ...settings });
 }
 

@@ -1,12 +1,13 @@
 import type { ActionsBlock, Button, HomeView, KnownBlock } from "@slack/types";
 import { randomToken } from "../crypto";
-import { type Deps, isAllowed } from "../deps";
+import { type Deps, isAdmin, isAllowed } from "../deps";
 import { evaluate, evaluateBreakdown } from "../engine/evaluate";
 import type { DayRow, Status } from "../engine/plan";
 import { nextSlot } from "../engine/slots";
 import { escapeMrkdwn, statusLine } from "../messages/render";
 import { isoWeekday } from "../time/week";
 import type { Reminder, User } from "../types";
+import { adminSection } from "./admin";
 import {
   formatCountdown,
   formatDuration,
@@ -74,6 +75,7 @@ export async function buildHome(deps: Deps, slackId: string, now = deps.clock())
       },
       { type: "context", elements: [md("the link is good for 30 minutes. if it expires, reopen this tab.")] },
     );
+    if (isAdmin(deps, slackId)) blocks.push(...adminSection(deps, now));
     blocks.push(...howItWorks());
     return { type: "home", blocks };
   }
@@ -125,6 +127,7 @@ export async function buildHome(deps: Deps, slackId: string, now = deps.clock())
     }),
   );
   blocks.push({ type: "divider" }, { type: "actions", elements: bottom });
+  if (isAdmin(deps, slackId)) blocks.push(...adminSection(deps, now));
   blocks.push(...howItWorks());
   return { type: "home", blocks: blocks.slice(0, 100) };
 }

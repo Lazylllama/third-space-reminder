@@ -9,6 +9,8 @@ export interface Config {
   encryptionKey: Buffer;
   databasePath: string;
   allowedSlackIds: Set<string> | null;
+  /** Slack ids that see the admin usage section on the Home tab. */
+  adminSlackIds: Set<string>;
   dryRun: boolean;
   logLevel: "debug" | "info" | "warn" | "error";
 }
@@ -17,6 +19,13 @@ function required(env: Record<string, string | undefined>, name: string): string
   const value = env[name]?.trim();
   if (!value) throw new Error(`Missing required env var ${name}`);
   return value;
+}
+
+function idList(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -31,10 +40,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const port = Number(env.PORT ?? 3000);
   if (!Number.isInteger(port) || port <= 0 || port > 65535) throw new Error("PORT must be a valid port number");
 
-  const allowed = (env.ALLOWED_SLACK_IDS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const allowed = idList(env.ALLOWED_SLACK_IDS);
+  const admins = idList(env.ADMIN_SLACK_IDS);
 
   const logLevel = (env.LOG_LEVEL ?? "info").toLowerCase();
   if (!["debug", "info", "warn", "error"].includes(logLevel)) throw new Error("LOG_LEVEL must be debug, info, warn or error");
@@ -50,6 +57,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     encryptionKey,
     databasePath: env.DATABASE_PATH?.trim() || "./data/goblin.sqlite",
     allowedSlackIds: allowed.length > 0 ? new Set(allowed) : null,
+    adminSlackIds: new Set(admins),
     dryRun: ["1", "true", "yes"].includes((env.DRY_RUN ?? "").toLowerCase()),
     logLevel: logLevel as Config["logLevel"],
   };
